@@ -1,0 +1,224 @@
+// User.java
+public class User {
+    private int userId;
+    private String name;
+    private String email;
+    private String referralCode;
+    private int points;
+
+    // Constructor
+    public User(int userId, String name, String email) {
+        this.userId = userId;
+        this.name = name;
+        this.email = email;
+        this.referralCode = generateReferralCode();
+        this.points = 0;
+    }
+
+    private String generateReferralCode() {
+        return name.substring(0, 2).toUpperCase() + userId + (int)(Math.random() * 1000);
+    }
+
+    // Encapsulation: secure points handling
+    public int getPoints() {
+        return points;
+    }
+
+    public void addPoints(int points) {
+        this.points += points;
+    }
+
+    public void deductPoints(int points) {
+        if (this.points >= points) {
+            this.points -= points;
+        } else {
+            System.out.println("Insufficient points!");
+        }
+    }
+
+    // Getters
+    public String getReferralCode() { return referralCode; }
+    public String getName() { return name; }
+    public String getEmail() { return email; }
+    public int getUserId() { return userId; }
+}// Referral.java
+public class Referral {
+    private int refId;
+    private User inviter;
+    private String inviteeEmail;
+    private String status; // PENDING, SUCCESS, FAILED
+    private int bonus;
+
+    // Constructor
+    public Referral(int refId, User inviter, String inviteeEmail) {
+        this.refId = refId;
+        this.inviter = inviter;
+        this.inviteeEmail = inviteeEmail;
+        this.status = "PENDING";
+        this.bonus = 0;
+    }
+
+    public void trackSignup(boolean success) {
+        if (success) {
+            this.status = "SUCCESS";
+            this.bonus = 50; // Example fixed bonus
+            inviter.addPoints(bonus);
+            System.out.println("Referral successful! Bonus awarded to " + inviter.getName());
+        } else {
+            this.status = "FAILED";
+        }
+    }
+
+    // Getters
+    public String getStatus() { return status; }
+    public int getBonus() { return bonus; }
+    public User getInviter() { return inviter; }
+    public String getInviteeEmail() { return inviteeEmail; }
+}// Reward.java (Base Class)
+public abstract class Reward {
+    protected int rewardId;
+    protected String name;
+    protected int pointsRequired;
+    protected int inventory;
+
+    public Reward(int rewardId, String name, int pointsRequired, int inventory) {
+        this.rewardId = rewardId;
+        this.name = name;
+        this.pointsRequired = pointsRequired;
+        this.inventory = inventory;
+    }
+
+    public abstract void deliver(); // Polymorphism & Overriding
+    public abstract void consumeInventory();
+
+    // Overloaded Redeem Methods
+    public boolean redeem(User user) {
+        return processRedemption(user, null);
+    }
+
+    public boolean redeem(User user, String promoCode) {
+        return processRedemption(user, promoCode);
+    }
+
+    private boolean processRedemption(User user, String promoCode) {
+        if (inventory <= 0) {
+            System.out.println("Reward out of stock!");
+            return false;
+        }
+        if (user.getPoints() < pointsRequired) {
+            System.out.println("Not enough points!");
+            return false;
+        }
+        int discount = (promoCode != null && promoCode.equals("PROMO10")) ? 10 : 0;
+        int finalPoints = pointsRequired - discount;
+
+        user.deductPoints(finalPoints);
+        consumeInventory();
+        deliver();
+        return true;
+    }
+}// VoucherReward.java
+public class VoucherReward extends Reward {
+    public VoucherReward(int rewardId, String name, int pointsRequired, int inventory) {
+        super(rewardId, name, pointsRequired, inventory);
+    }
+
+    @Override
+    public void consumeInventory() {
+        inventory--;
+        System.out.println("Voucher inventory updated. Remaining: " + inventory);
+    }
+
+    @Override
+    public void deliver() {
+        System.out.println("Voucher code for " + name + " has been emailed!");
+    }
+}// GiftReward.java
+public class GiftReward extends Reward {
+    public GiftReward(int rewardId, String name, int pointsRequired, int inventory) {
+        super(rewardId, name, pointsRequired, inventory);
+    }
+
+    @Override
+    public void consumeInventory() {
+        inventory--;
+        System.out.println("Gift inventory updated. Remaining: " + inventory);
+    }
+
+    @Override
+    public void deliver() {
+        System.out.println("Gift item " + name + " will be shipped soon!");
+    }
+}// ReferralService.java
+import java.util.*;
+
+public class ReferralService {
+    private Map<String, User> users = new HashMap<>();
+    private List<Referral> referrals = new ArrayList<>();
+    private List<Reward> rewards = new ArrayList<>();
+
+    public void registerUser(User user) {
+        users.put(user.getReferralCode(), user);
+    }
+
+    public Referral createReferral(int refId, String inviterCode, String inviteeEmail) {
+        User inviter = users.get(inviterCode);
+        if (inviter == null) {
+            System.out.println("Invalid referral code!");
+            return null;
+        }
+        Referral referral = new Referral(refId, inviter, inviteeEmail);
+        referrals.add(referral);
+        return referral;
+    }
+
+    public void trackSignup(int refId, boolean success) {
+        for (Referral ref : referrals) {
+            if (refId == ref.getInviter().getUserId()) {
+                ref.trackSignup(success);
+                return;
+            }
+        }
+    }
+
+    public void addReward(Reward reward) {
+        rewards.add(reward);
+    }
+
+    public void showLeaderboard() {
+        System.out.println("\n--- Referral Leaderboard ---");
+        users.values().stream()
+            .sorted((u1, u2) -> Integer.compare(u2.getPoints(), u1.getPoints()))
+            .forEach(u -> System.out.println(u.getName() + " → " + u.getPoints() + " points"));
+    }
+
+    public List<Reward> getRewards() { return rewards; }
+}// ReferralAppMain.java
+public class ReferralAppMain {
+    public static void main(String[] args) {
+        ReferralService service = new ReferralService();
+
+        // Create users
+        User alice = new User(1, "Alice", "alice@mail.com");
+        User bob = new User(2, "Bob", "bob@mail.com");
+        service.registerUser(alice);
+        service.registerUser(bob);
+
+        // Generate referral & track signup
+        Referral ref1 = service.createReferral(101, alice.getReferralCode(), "charlie@mail.com");
+        if (ref1 != null) ref1.trackSignup(true);
+
+        // Add rewards
+        Reward voucher = new VoucherReward(201, "Amazon Voucher", 100, 5);
+        Reward gift = new GiftReward(202, "Coffee Mug", 50, 10);
+        service.addReward(voucher);
+        service.addReward(gift);
+
+        // Alice tries to redeem
+        System.out.println("\nRedeeming Reward...");
+        voucher.redeem(alice, "PROMO10"); // Overloaded redeem()
+
+        // Show leaderboard
+        service.showLeaderboard();
+    }
+}
